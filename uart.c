@@ -9,7 +9,7 @@
 
 #define READ_TERMINAL 0
 #define WRITE_TERMINAL 1
-#define NUM_PRESS 4
+#define NUM_PRESS 5
 
 mraa_uart_context uart;
 mraa_aio_context adc_a0[NUM_PRESS];
@@ -54,6 +54,7 @@ void thread_press(struct ARG *arg) {
 	} else {
 		if(pre_high) {
 			buffer[4] = max_value;
+			buffer[3] = arg->ano + 1;
 			mraa_uart_write(uart, buffer, sizeof(buffer));
 
 			printf("press: %d: %d\n", arg->ano,  max_value);

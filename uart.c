@@ -39,34 +39,46 @@ static void sleep_ms(unsigned int secs) {
 }
 
 void thread_press(struct ARG *arg) {
-    uint16_t adc_value = 0, max_value = 0;
+    uint16_t adc_value = 0, max_value = 0, value_pre = 0,  value_cur = 0;
     char pre_high = 0;
 
-    int i = 0;
+//    int i = 0;
     while(1) {
 	sleep_ms(100);
-        adc_value = mraa_aio_read(adc_a0[arg->ano]);
-//	printf("in thread_value: %d\n", arg->ano);
+        adc_value = value_cur = mraa_aio_read(adc_a0[arg->ano]);
 
-	if(adc_value > 50) {
-            pre_high = 1;
-  	    max_value = max_value > adc_value ? max_value: adc_value;
-	} else {
-		if(pre_high) {
-			buffer[4] = max_value;
+	if (arg->ano == 4) {
+		value_cur = abs(adc_value - value_pre);
+
+		if(value_cur > 50) {
+			buffer[4] = value_cur;
 			buffer[3] = arg->ano + 1;
-			mraa_uart_write(uart, buffer, sizeof(buffer));
 
-			printf("press: %d: %d\n", arg->ano,  max_value);
+			mraa_uart_write(uart, buffer, sizeof(buffer));
+			printf("press: %d: %d\n", arg->ano, value_cur);
 		}
-		max_value = adc_value;
-		pre_high = 0;
+		value_pre = adc_value;
+	} else {
+		if(adc_value > 50) {
+			pre_high = 1;
+			max_value = max_value > adc_value ? max_value: adc_value;
+		} else {
+			if(pre_high) {
+				buffer[4] = max_value;
+				buffer[3] = arg->ano + 1;
+				mraa_uart_write(uart, buffer, sizeof(buffer));
+
+				printf("press: %d: %d\n", arg->ano,  max_value);
+			}
+			max_value = adc_value;
+			pre_high = 0;
+		}
 	}
 
 //        adc_value_float = mraa_aio_read_float(adc_a0);
 
-	data_press[i%5] = adc_value;
-	i = (i + 1) %5;
+//	data_press[i%5] = adc_value;
+//	i = (i + 1) %5;
     }
 }
 

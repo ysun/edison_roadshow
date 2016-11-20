@@ -4,14 +4,18 @@
 
 #include <unistd.h>
 #include <fcntl.h>
+
+#include <sys/select.h>
+
 #define READ_TERMINAL 0
 #define WRITE_TERMINAL 1
+#define NUM_PRESS 2
 
 mraa_uart_context uart;
-mraa_aio_context adc_a0;
+mraa_aio_context adc_a0[NUM_PRESS];
 
 struct ARG {
-	int a;
+	int ano;
 };
 
 void mydelay(int n) {
@@ -27,13 +31,22 @@ char buffer[] = {'\xFF','\x55',
 
 int do_main(int argc, char** argv);
 
+static void sleep_ms(unsigned int secs) {
+    struct timeval tval;
+    tval.tv_sec=secs/1000;
+    tval.tv_usec=(secs*1000)%1000000;
+    select(0,NULL,NULL,NULL,&tval);
+}
+
 void thread_press(struct ARG *arg) {
     uint16_t adc_value = 0, max_value = 0;
     char pre_high = 0;
 
     int i = 0;
     while(1) {
-        adc_value = mraa_aio_read(adc_a0);
+	sleep_ms(100);
+        adc_value = mraa_aio_read(adc_a0[arg->ano]);
+	printf("in thread_value: %d\n", arg->ano);
 
 	if(adc_value > 50) {
             pre_high = 1;
@@ -43,7 +56,7 @@ void thread_press(struct ARG *arg) {
 			buffer[4] = max_value;
 			mraa_uart_write(uart, buffer, sizeof(buffer));
 
-			printf("%d\n", max_value);
+			printf("ysun %d\n", max_value);
 		}
 		max_value = adc_value;
 		pre_high = 0;
@@ -58,9 +71,9 @@ void thread_press(struct ARG *arg) {
 
 int main(int argc, char** argv)
 {
-    pthread_t pid_press;
-    struct ARG arg;
-    int ret = 0;
+    pthread_t pid_press[5];
+    struct ARG arg_press[5];
+    int ret = 0, i;
 
 
     //Init UART
@@ -72,34 +85,31 @@ int main(int argc, char** argv)
     }
 
     //test uart write!
-//    mraa_uart_write(uart, buffer, sizeof(buffer));
+    //mraa_uart_write(uart, buffer, sizeof(buffer));
 
-    //Init AIO
-    adc_a0 = mraa_aio_init(0);
-    if (adc_a0 == NULL) {
-        fprintf(stderr, "AIO0 failed to setup\n");
+    for(i = 0; i<NUM_PRESS; i++) {
+	    //Init AIO
+	    adc_a0[i] = mraa_aio_init(i);
+	    if (adc_a0[i] == NULL) {
+		    fprintf(stderr, "AIO0[%d] failed to setup\n", i);
+	    }
+
+	    //Create child thread!
+            arg_press[i].ano = i;
+	    ret = pthread_create(&pid_press[i], NULL, (void*)thread_press, (void*) &arg_press[i]);
+
+	    if(ret != 0)
+		    printf("Thread Create Error: %d\n", i);
     }
 
-    //Create child thread!
-    ret = pthread_create(&pid_press, NULL, (void*)thread_press, (void*) &arg);
-    if(ret != 0)
-        printf("Thread Create Error\n");
-
-    pthread_join(pid_press, NULL);
-    while(1) {
-        printf("%d\n", data_press[2]);
-	buffer[4] = data_press[2];
-
-        mraa_uart_write(uart, buffer, sizeof(buffer));
-        mydelay(1000);
-     }
+    pthread_join(pid_press[0], NULL);
 
 //But, should not run here!
-    pthread_join(pid_press, NULL);
+    pthread_join(pid_press[0], NULL);
     printf("Main Ends\n");
     mraa_uart_stop(uart);
     mraa_deinit();
-    mraa_aio_close(adc_a0);
+//    mraa_aio_close(adc_a0);
     return EXIT_SUCCESS;
 }
 
